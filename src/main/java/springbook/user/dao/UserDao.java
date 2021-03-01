@@ -1,115 +1,65 @@
 package springbook.user.dao;
 
+
 import org.springframework.dao.EmptyResultDataAccessException;
 
-import springbook.user.dao.statemen_strategy.DeleteAllStatement;
-import springbook.user.dao.statemen_strategy.StatementStrategy;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import org.springframework.jdbc.core.RowMapper;
 import springbook.user.domain.User;
 
 import javax.sql.DataSource;
 import java.sql.*;
+import java.util.List;
 
 public class UserDao {
 
-    private JdbcContext jdbcContext;
-//    public void setJdbcContext(JdbcContext jdbcContext) {
-//        this.jdbcContext = jdbcContext;
-//    }
-
-    private DataSource dataSource;
+    private JdbcTemplate jdbcTemplate;
 
     public void setDataSource(DataSource dataSource) {
-        this.dataSource = dataSource;
-        this.jdbcContext = new JdbcContext();
-        this.jdbcContext.setDataSource(dataSource);
+        this.jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
+
+    private RowMapper<User> userMapper = new RowMapper<User>() {
+        @Override
+        public User mapRow(ResultSet resultSet, int i) throws SQLException {
+            User user = new User();
+            user.setId(resultSet.getString("id"));
+            user.setName(resultSet.getString("name"));
+            user.setPassword(resultSet.getString("password"));
+
+            return user;
+        }
+    };
+
     public void add(User user) throws SQLException {
-        jdbcContext.executeSql(
-                "insert into users(id, name, password) " +
-                        "values(?, ?, ?)",
-                user.getId(), user.getName(), user.getPassword());
+        jdbcTemplate.update("insert into users(id, name, password) " +
+                "values(?, ?, ?)", user.getId(), user.getName(), user.getPassword());
     }
 
 
     public User get(String id) throws SQLException {
+        return this.jdbcTemplate.queryForObject("select * from users where id = ?", new Object[]{id}, userMapper);
+    }
 
-        Connection c = dataSource.getConnection();
+    public List<User> getAll() {
+        List<User> list = this.jdbcTemplate.query("select * from users order by id", userMapper);
 
-        PreparedStatement ps = c.prepareStatement(
-                "select * " +
-                        "from users " +
-                        "where id = ?");
-
-        ps.setString(1, id);
-        ResultSet rs = ps.executeQuery();
-        User user = null;
-
-        if (rs.next()) {
-            user = new User();
-            user.setId(rs.getString("id"));
-            user.setName(rs.getString("name"));
-            user.setPassword(rs.getString("password"));
+        if (list.size() == 0) {
+            return null;
         }
 
-        rs.close();
-        ps.close();
-        c.close();
-        if (user == null) {
-            throw new EmptyResultDataAccessException(1);
-        }
-
-        return user;
+        return list;
     }
 
     public void deleteAll() throws SQLException {
-        jdbcContext.executeSql("delete from users");
+        this.jdbcTemplate.update("delete from users");
     }
 
 
     public int getCount() throws SQLException {
-        Connection c = null;
-        PreparedStatement ps = null;
-        ResultSet rs = null;
-
-        try {
-            c = dataSource.getConnection();
-            ps = c.prepareStatement(
-                    "select count(*) " +
-                            "from users");
-            rs = ps.executeQuery();
-            rs.next();
-            return rs.getInt(1);
-        } catch (SQLException e) {
-            throw e;
-        } finally {
-            if (rs != null) {
-                try {
-                    rs.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-
-
-            if (ps != null) {
-                try {
-                    ps.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-
-
-            if (c != null) {
-                try {
-                    c.close();
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-
-        }
+        return jdbcTemplate.queryForObject("select count(*) from users", Integer.class);
     }
 
 }
