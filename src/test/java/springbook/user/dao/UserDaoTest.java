@@ -6,11 +6,14 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.EmptyResultDataAccessException;
 
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit4.SpringRunner;
+import springbook.user.dao.Exception.DuplicateUserIdException;
 import springbook.user.domain.User;
 
 
@@ -27,13 +30,15 @@ public class UserDaoTest {
     @Autowired
     private UserDao userDao;
 
+    @Autowired
+    private DataSource dataSource;
+
     private User user1;
     private User user2;
     private User user3;
 
     @Before
     public void setUp() throws SQLException {
-
 
 
         System.out.println(this);
@@ -99,6 +104,7 @@ public class UserDaoTest {
         fail("실패해야한다.");
 
     }
+
     @Test
     public void getAll() throws Exception {
         //given
@@ -125,8 +131,28 @@ public class UserDaoTest {
         checkSameUser(user3, users3.get(0));
         checkSameUser(user1, users3.get(1));
         checkSameUser(user2, users3.get(2));
+    }
 
+    @Test(expected = DuplicateKeyException.class)
+    public void 중복_아이디_검사() throws Exception {
 
+        userDao.add(user1);
+        userDao.add(user1);
+
+        fail("중복 아이디 예외가 발생해야 한다.");
+    }
+
+    @Test
+    public void sqlExceptionTranslate() throws Exception {
+        try {
+            userDao.add(user1);
+            userDao.add(user1);
+        } catch (DuplicateKeyException e) {
+            SQLException sqlEx = (SQLException) e.getRootCause();
+            SQLErrorCodeSQLExceptionTranslator errorTranslator = new SQLErrorCodeSQLExceptionTranslator(this.dataSource);
+
+            assertThat(errorTranslator.translate(null, null, sqlEx)).isInstanceOf(DuplicateKeyException.class);
+        }
     }
 
     private void checkSameUser(User user1, User user2) {
